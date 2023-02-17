@@ -1,6 +1,6 @@
-# withdraw from staking address
+-- very much work in progress still..
 
-we of course need a staking credential, an address..
+# withdraw from staking address
 
 instead of using a public/private key to create a stake address, we can instead use a plutus script, and then the hash will give a stake address, a script stake address
 
