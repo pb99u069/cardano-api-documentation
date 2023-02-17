@@ -1,17 +1,10 @@
-# Building a pay to validator tx
+# Paying to a script validator
 
 ## example taken from PPP 0303
 
-in order to use cardano-cli we need to serialise various plutus-types, and in order to do this, we use the cardano-api
-the cardano-api is the haskell library that the cardano-cli uses under the hood, so it contains all the functionality that we need to talk to the node (submit transactions, query the blockchain and so on)
-
-so when working with Plutus, we need to first convert and then serialise these plutus types like following:
-
 ### Validator
 
-first, we need to convert the plutus validator into a cardano-api type and write it to a file:
-
-the function below does this, using the `PlutusScriptSerialised` data constructor which takes as argument a `ShortByteString`
+first, we need to convert the plutus validator into a cardano-api type and write it to a file. The function below does this, using the `PlutusScriptSerialised` data constructor which takes as argument a `ShortByteString`
 
 ```haskell
 writeValidator :: FilePath -> Ledger.Validator -> IO (Either (FileError()) ())
@@ -38,9 +31,7 @@ alternatively, we can use this [library](https://github.com/input-output-hk/plut
 
 Building a transaction with a payment to a script address brings two major changes. First, instead of a payment key hash, we need a script hash for our address. and second, we need to provide a datum hash.
 
-so how do we get the address of a script?
-
-as for a key address, we can use `cardano-cli address build`, but this time instead of a `VerificationKey PaymentKey`, we must provide a `Script`
+so how do we get the address of a script? As for a key address, we can use `cardano-cli address build`, but this time instead of a `VerificationKey PaymentKey`, we must provide a `Script`
 
 under the hood, `makeShelleyAddress` must be applied to a `PaymentCredential`, though. So cardano-api provides the `hashScript` function which converts our `PlutusScript PlutusScriptV1 (PlutusScriptSerialised script)` into a value of type `ScriptHash`.
 applying the `PaymentCredentialByScript` data constructor to this script finally gives us the correct PaymentCredential
