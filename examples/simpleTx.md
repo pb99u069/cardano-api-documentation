@@ -131,6 +131,8 @@ where `wsk` is a `WitnessPaymentKey (SigningKey PaymentKey)` of type `ShelleyWit
 
 note: creating a witness can also be done separatly by providing a tx-body-file and a signing-key-file to the command `cardano-cli transaction witness`
 
+note: the module `Cardano.Api.Convenience.Construction` contains the `constructBalancedTx` function which does the balancing in signing all in one. And to get the required arguments from the node, the `Cardano.Api.Convenience.Query` module offers the `queryStateForBalancedTx` function.
+
 ### submit simple transaction
 
 the parser defaults to the cardano consensus mode
