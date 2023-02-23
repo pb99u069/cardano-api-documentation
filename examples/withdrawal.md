@@ -25,7 +25,7 @@ makeStakeAddress nw sc =
 
 the corresponding cardano-cli command is `cardano-cli stake-address build`.
 
-## registering and delegating
+## Registering and delegating
 
 The stake address itself will only be used for withdrawals. To register and delegate the address to a pool, we only need the underlying `StakeCredential`.
 
@@ -78,16 +78,15 @@ The execution units for the stake script will, as in the other examples, again b
 
 finally the transaction has to signed with the signing key associated with the `--tx-in` value (which is not only needed for the transaction fees, but also for the registraion deposit). 
 
-## withdrawing
+## Withdrawing
 
 the `--change-address` given above is a key address, which has not only a payment component, but also a staking component which is of course our staking script.
 so through the transaction above, this address got already funded and delegates theses funds to the pool with the poolId defined in the delegation certificate.
 
-This is done by adding the `--stake-script-file` argument to the `cardano-cli address build` command.
+Building such an address can be done by adding the `--stake-script-file` argument to the `cardano-cli address build` command.
 The only change under the hood is that the argument of type `StakeAddressReference` for the cardano-api `makeShelleyAddress` function is now a `StakeAddressByValue stakeCredential` instead of a `NoStakeAddress`
 
 So, once the stake address has accumulated rewards, they can be withdrawn with the following transaction:
-
 
 ```bash
 cardano-cli transaction build \
@@ -105,9 +104,11 @@ cardano-cli transaction build \
 
 The input specific to withdrawing rewards for the cardano-cli function `runTxBuild` is of type:
  
+```haskell
 [(StakeAddress, Lovelace, Maybe (ScriptWitness WitCtxStake era))]
+```
 
-All the information necessery to build a value of this type is there, so we can build it.
+All the information necessery to build a value of this type is there; the protocol parameters, script-file and redeemer-file for the `ScriptWitness`; the `$amt1` for the `Lovelace` and the `user1-script-stake.addr` for the `StakeAddress`.
 Additionally, the `Just scriptWitness` value must be converted into the witness type `Witness WitCtxStake era` needed for the `txWithdrawals` field of the transaction body content. 
 
 ```haskell
