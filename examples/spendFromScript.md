@@ -1,6 +1,6 @@
 # Building a spending from validator tx
 
-## example taken from PPP 0303
+This example is taken from PPP0303
 
 ```bash
 cardano-cli transaction build \
@@ -45,12 +45,12 @@ data Witness witctx era where
                    -> Witness            witctx era
 ```
 
-building the txOut is straightforward in this example, as the output goes to a key address.
+Building the txOut is straightforward in this example, as the output goes to a key address.
 
-the --requiredSignerHash gets parsed into a a value for the txExtraKeyWits field of the transaction body content. Extra key witnesses visible to scripts are supported from the Alonzo era onwards.
+The `--requiredSignerHash` input gets parsed into a a value for the `txExtraKeyWits` field of the transaction body content. Extra key witnesses visible to scripts are supported from the Alonzo era onwards.
 In our case we need this because the script checks that the transaction is signed by a certain party.
 
-As this transaction requires the running of a script to spend the txIn, the `makeTransactionAutoBalance` has to do some heavier work. 
+As this transaction requires the running of a script to spend the txIn, the `makeTransactionAutoBalance` has to do some heavier work as in the two previous examples. 
 
 first, as before, make a TxBody, then run `evaluateTransactionExecutionUnits`. Under the hood, this function runs the script with `evaluateScriptRestricting` from the [plutus-ledger-api](https://github.com/input-output-hk/plutus/blob/master/plutus-ledger-api/src/PlutusLedgerApi/Common/Eval.hs)
 
@@ -69,7 +69,6 @@ the result is:
 ### signing and submitting
 
 we need the skey for the collateral, the rest is identical to signing and submitting the simple transaction.
-
 
 ```bash
 cardano-cli transaction build \

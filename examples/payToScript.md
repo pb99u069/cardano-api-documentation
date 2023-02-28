@@ -1,52 +1,33 @@
-# Paying to a script validator
+# Transaction to a script address
 
-## example taken from PPP 0303
+This example is taken from the PPP0303
 
-### Validator
+## building the transaction
 
-first, we need to convert the plutus validator into a cardano-api type and write it to a file. The function below does this, using the `PlutusScriptSerialised` data constructor which takes as argument a `ShortByteString`
+Building a transaction with a payment to a script address comes with two major changes. First, instead of a payment key hash, we need a script hash for our address. and second, we need to provide a datum hash.
+
+having address and datum, the txOut will look like this: (using `ReferenceScriptNone` as `ReferenceScript era` and a value for TxOutValue):
+
+```haskell
+data TxOut ctx era = TxOut (AddressInEra    era)
+                           (TxOutValue      era)
+                           (TxOutDatum ctx  era)
+                           (ReferenceScript era)
+```
+
+so how do we get script address? As for a key address, we can use `cardano-cli address build`, but this time instead of a verification key, we must provide a `Script`.
+
+### Getting the script
+
+coming from the plutus side, we get the `Script` by converting the plutus validator into a cardano-api type and writing it to a file. The function below does this, using the `PlutusScriptSerialised` data constructor which takes as argument a `ShortByteString`
 
 ```haskell
 writeValidator :: FilePath -> Ledger.Validator -> IO (Either (FileError()) ())
 writeValidator file = writeFileTextEnvelope @(PlutusScript PlutusScriptV1) file Nothing . PlutusScriptSerialised . SBS.toShort . LBS.toStrict . serialise . Ledger.unValidatorScript
 ```
 
-### ScriptData
-
-cardano-api has its own `data` type. The conversion can be done with the cardano-api function `fromPlutusData :: Plutus.Data -> ScriptData`.
-To use this cardano-api data in the cardano-cli, it is serialised to json and written to a file. `scriptDataToJson` works either with `ScriptDataJsonDetailedSchema` (used to write Json into a file) or with `ScriptDataJsonNoSchema` (if inlined in the command directly).
-the following code shows how to convert and serialise the unit value.
-
-```haskell
-writeUnit :: IO ()
-writeUnit = writeJSON "unit.json" ()
-
-writeJSON :: PlutusTx.ToData a => FilePath -> a -> IO ()
-writeJSON file = LBS.writeFile file . encode . scriptDataToJson ScriptDataJsonDetailedSchema . fromPlutusData . PlutusTx.toData
-```
-
-alternatively, we can use this [library](https://github.com/input-output-hk/plutus-apps/blob/main/plutus-ledger/src/Ledger/Tx/CardanoAPI.hs) as an interface to the transaction types from `cardano-api`, see hydra-demo.md example.
-
-### building the transaction
-
-Building a transaction with a payment to a script address brings two major changes. First, instead of a payment key hash, we need a script hash for our address. and second, we need to provide a datum hash.
-
-so how do we get the address of a script? As for a key address, we can use `cardano-cli address build`, but this time instead of a `VerificationKey PaymentKey`, we must provide a `Script`
-
-under the hood, `makeShelleyAddress` must be applied to a `PaymentCredential`, though. So cardano-api provides the `hashScript` function which converts our `PlutusScript PlutusScriptV1 (PlutusScriptSerialised script)` into a value of type `ScriptHash`.
-applying the `PaymentCredentialByScript` data constructor to this script finally gives us the correct PaymentCredential
-
-```haskell
-data Script lang where
-
-     SimpleScript :: !(SimpleScriptVersion lang)
-                  -> !(SimpleScript lang)
-                  -> Script lang
-
-     PlutusScript :: !(PlutusScriptVersion lang)
-                  -> !(PlutusScript lang)
-                  -> Script lang
-```
+under the hood, `makeShelleyAddress` (see below) is applied to a `PaymentCredential`, though. So the cardano-api provides the `hashScript` function which converts our `PlutusScript PlutusScriptV1 (PlutusScriptSerialised script)` into a value of type `ScriptHash`.
+applying the `PaymentCredentialByScript` data constructor to this hashed script finally gives us the correct PaymentCredential.
 
 ```haskell
 makeShelleyAddress :: NetworkId
@@ -60,13 +41,32 @@ makeShelleyAddress nw pc scr =
       (toShelleyStakeReference scr)
 ```
 
-To get a `AddressInEra`, needed to build the txOut, we can use the `shelleyAddressInEra` function
+As a last step, the shelley address must be converted into a value of type `AddressInEra` needed to build the txOut. This can be done with the `shelleyAddressInEra` function. 
 
-To build a transaction for a payment to a script, we additionally need the datum, provided to `cardano-cli` via --tx-out-datum-hash-file in this case.
+### ScriptData
 
+To build a transaction for a payment to a script, we additionally need the datum, provided to the `cardano-cli` via --tx-out-datum-hash-file in this case.
+
+The cardano-api has its own `data` type. The conversion can be done with the cardano-api function `fromPlutusData :: Plutus.Data -> ScriptData`.
+
+To use this cardano-api data in the cardano-cli, it is serialised to json and written to a file. `scriptDataToJson` works either with `ScriptDataJsonDetailedSchema` (used to write Json into a file) or with `ScriptDataJsonNoSchema` (if inlined in the command directly).
+
+the following code shows how to convert and serialise the unit value.
+
+```haskell
+writeUnit :: IO ()
+writeUnit = writeJSON "unit.json" ()
+
+writeJSON :: PlutusTx.ToData a => FilePath -> a -> IO ()
+writeJSON file = LBS.writeFile file . encode . scriptDataToJson ScriptDataJsonDetailedSchema . fromPlutusData . PlutusTx.toData
+```
+
+alternatively, we can use this [library](https://github.com/input-output-hk/plutus-apps/blob/main/plutus-ledger/src/Ledger/Tx/CardanoAPI.hs) as an interface to the transaction types from `cardano-api`, see hydra-demo.md example.
 this file is read and parsed into a `TxOutDatumHash ScriptDataInAlonzoEra hash`, where hash is of type `Hash ScriptData`. As mentioned above, a value of type `ScriptData` can also be converted directly from a plutus type with `fromPlutusData` 
 
-so, having the script payment credential and datum, building the TxOut is straightforward (using `ReferenceScriptNone` as `ReferenceScript era`):
+### putting it all together
+
+so, having the address and datum, building the TxOut is straightforward (using `ReferenceScriptNone` as `ReferenceScript era`):
 
 ```haskell
 data TxOut ctx era = TxOut (AddressInEra    era)

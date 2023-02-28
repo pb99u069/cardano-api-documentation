@@ -1,6 +1,6 @@
 # Building a minting Transaction
 
-## example taken from PPP 0306
+This example taken from PPP0306
 
 from the cardano-api perspective, there is no difference beween `writeValidator` (see payToScript.md) and `writeMintingPolicy` 
 
@@ -26,10 +26,10 @@ hashScript (PlutusScript PlutusScriptV1 (PlutusScriptSerialised script)) =
   $ Alonzo.PlutusScript Alonzo.PlutusV1 script
 ```
 
-note that this `ScriptHash` is separate from the 'Hash' type to avoid the script
+(note that this `ScriptHash` is separate from the 'Hash' type to avoid the script
 hash type being parametrised by the era. The representation is era
 independent, and there are many places where we want to use a script
-hash where we don't want things to be era-parametrised.
+hash where we don't want things to be era-parametrised.)
 
 then this is serialised with `serialiseToRawBytesHexText`, giving us the policyId
 
