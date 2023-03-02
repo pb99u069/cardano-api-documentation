@@ -4,13 +4,13 @@ the following example is taken from the PPP0303
 
 ## Generate keys
 
-First, we want to create a key pair of type `VerificationKey PaymentKey` and `SigningKey PaymentKey`. To get the singing key, the `cardano-cli` command `address key-gen` uses `generateSigningKey :: Key keyrole => AsType keyrole -> IO (SigningKey keyrole)` from the cardano-api under the hood.
+First, we need to create a key pair of type `VerificationKey PaymentKey` and `SigningKey PaymentKey`. To get the singing key, the `cardano-cli` command `address key-gen` uses the cardano-api function `generateSigningKey :: Key keyrole => AsType keyrole -> IO (SigningKey keyrole)` under the hood.
 
 `keyrole` can be a `ByronKey`, `PaymentKey` (by default) or a `PaymentExtendedKey`, resulting in `AsByronKey`, `AsPaymentKey` or `AsPaymentExtendedKey` values for `AsType keyrole`.
 
 The functions for the cryptographic key are coming from the cardano-crypto-class package, for PaymentKeys we use the public-key signature system Ed25519, Ed25519DSIGN being an instance of the [class DSIGNAlgorithm](https://github.com/input-output-hk/cardano-base/blob/dd60865a18478aa7f2936693da952cd22d76b080/cardano-crypto-class/src/Cardano/Crypto/DSIGN/Ed25519.hs)
 
-having a signing key, cardano-cli uses the `getVerificationKey :: SigningKey PaymentKey -> VerificationKey PaymentKey` function which is defined in the `Key` class of which `PaymentKey` is an instance. 
+having built a signing key, cardano-cli uses the `getVerificationKey :: SigningKey PaymentKey -> VerificationKey PaymentKey` function which is defined in the `Key` class of which `PaymentKey` is an instance. 
 
 ```haskell
 -- cardano-cli
@@ -20,9 +20,9 @@ generateKeyPair asType = do
   return (getVerificationKey skey, skey)
 ```
 
-Having generated the pair, the cardano-cli serialises each key and writes it to a file, whith `writeFileTextEnvelope` from the cardano-api
+Having generated the pair, the cardano-cli serialises each key and writes it to a file, using `writeFileTextEnvelope` from the cardano-api.
 
-The serialisation to CBOR is done inside the `serialiseToTextEnvelope` function, that is why a type that is an instance of the `HasTextEnvelope` class must also be an instance of the `SerialiseAsCBOR` class, which is the case for both `SigningKey PaymentKey` and `VerificationKey PaymentKey` 
+The serialisation to CBOR is done inside the `serialiseToTextEnvelope` function, so a type that is an instance of the `HasTextEnvelope` class must also be an instance of the `SerialiseAsCBOR` class, which is the case for both `SigningKey PaymentKey` and `VerificationKey PaymentKey`.
 
 ```haskell
 serialiseToTextEnvelope :: forall a. HasTextEnvelope a => Maybe TextEnvelopeDescr -> a -> TextEnvelope
@@ -41,7 +41,7 @@ serialiseToTextEnvelope mbDescr a =
 
 The `cardano-cli` command `address build` works for both key and script addresses.
 
-First, the `runAddressBuild` function checks if the argument provided is a `PaymentVerifierKey` or a `PaymentVerifierScript`. In the case of a key, it builds a value of type `AddressAny` with `AddressShelley <$> buildShelleyAddress (castVerificationKey vk) mbStakeVerifier nw` where nw is the networkId and mbStakeVerifier an optional stake key. `buildShelleyAddress` in turn uses `makeShelleyAddress` from the cardano-api under the hood.
+First, the `cardano-cli` function `runAddressBuild` checks if the argument provided is a `PaymentVerifierKey` or a `PaymentVerifierScript`. In the case of a key, it builds a value of type `AddressAny` with `AddressShelley <$> buildShelleyAddress (castVerificationKey vk) mbStakeVerifier nw` where nw is the networkId and mbStakeVerifier an optional stake key. `buildShelleyAddress` in turn uses `makeShelleyAddress` from the cardano-api under the hood.
 
 ```haskell
 makeShelleyAddress :: NetworkId
@@ -59,7 +59,7 @@ In case the argument to `runAddressBuild` is a script, the `PaymentCredential` v
 
 ## A simple transaction to a key address
 
-To build a simple transaction to a key address (as opposed to a slightly more complex transaction to a script address), the cardano-cli tool needs only very few parameters:
+To build a simple transaction to a key address (as opposed to a slightly more complex transaction to a script address), the cardano-cli tool needs only a few parameters:
  
 ```bash
 cardano-cli transaction build \
@@ -71,8 +71,10 @@ cardano-cli transaction build \
     --out-file tx.body
 ```
 
-The `--tx-in` input gets parsed to a `(TxIn, Maybe (ScriptWitness WitCtxTxIn era))`. As this input is spent from a key address, it doesn't need a script witness, and its value is thus of `(txIn, Nothing)`. 
-Of course, a witness is also needed to spend funds from a key address, and so inside the `runTxBuild` function, the `(tx-in, Nothing)` gets converted into a value of `(txin, BuildTxWith $ KeyWitness KeyWitnessForSpending)`. This is the format that the cardano-api type `TxBodyContent` excpects for its tx-ins field.
+with these values, we can build the two fields `txIns` and `txOuts` of the cardano-api `TxBodyContent`. 
+
+The `--tx-in` input gets parsed to a `(TxIn, Maybe (ScriptWitness WitCtxTxIn era))`. As this input is spent from a key address, we don't need a script witness, and the value is thus `(txIn, Nothing)`. 
+Of course, a witness is also needed to spend funds from a key address, and so inside the `runTxBuild` function, the `(tx-in, Nothing)` gets converted into a value of `(txin, BuildTxWith $ KeyWitness KeyWitnessForSpending)`. This is the format that the cardano-api type `TxBodyContent` excpects for its `txIns` field.
 
 The `--tx-out` input meanwhile gets parsed to a `TxOut CtxTx era`, which is already the format the `TxBodyContent` excpects for its `tx-outs` field. 
 
@@ -85,14 +87,12 @@ data TxOut ctx era = TxOut (AddressInEra    era)
 
 As we don't need a datum for an output to a key address, the `TxOutDatum` is of value TxOutDatumNone. We neither have a `ReferenceScript`, so its value is `ReferenceScriptNone`.
 
-The change-address isn't needed at this point, but it will be later in the balancing process.
+The `cardano-cli` can then proceed to build a `BalancedTxBody era` with `runTxBuild`.
 
-The `cardano-cli` then proceeds to build a `BalancedTxBody era` with `runTxBuild`.
+This `runTxBuild` contains basically two big steps. The first: constructing the cardano-api `txBodyContent`. As already described above, we have the two fields `txIns` and `txOuts`. Most of the other fields are of no importance for a simple transaction and get 'none' values, like for example `TxInsCollateralNone :: TxInsCollateral era`
+The one field lacking a value at this point is `txFee`. Since the transaction hasn't been balanced yet - which is the second big step inside `runTxBuild` - it is set to 0 at this point.
 
-This `runTxBuild` contains basically two big steps. The first: constructing the txBodyContent. As already described above, we have the two fields `tx-ins` and `tx-outs` for this. Most of the other fields are of no importance for a simple transaction and get 'none' values, like for example `TxInsCollateralNone :: TxInsCollateral era`
-The one field lacking a value at this point is `tx-fee`. Since the transaction hasn't been balanced yet - which is the second big step inside `runTxBuild` - it is set to 0 for now.
-
-Balancing the transaction is done with `makeTransactionBodyAutoBalance`. To use this function we need a running node to query the `nodeEra`, to which we then can apply the queryStateForBalancedTx function. Having thus all the necessary node information, `makeTransactionBodyAutoBalance` finally produces a BalancedTxBody.
+Balancing the transaction is done with `makeTransactionBodyAutoBalance` (see `Balancing the transaction` in `spendFromScript.md` for details). To use this function we need a running node to query the `nodeEra`, to which we then can apply the queryStateForBalancedTx function. Having thus all the necessary node information, `makeTransactionBodyAutoBalance` finally produces a BalancedTxBody.
      
 ```haskell
 data BalancedTxBody era
@@ -111,7 +111,7 @@ The key witness is calculated by applying the `makeShelleyKeyWitness` function t
 
 `signedTx = makeSignedTransaction allKeyWits txbody`
 
-where allKeyWits is, in our case, a list of just one key witness.
+where allKeyWits is, in our case, a list of just the one key witness.
 
 under the hood, signing a transaction looks like this:
 

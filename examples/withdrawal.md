@@ -12,7 +12,7 @@ where `stakeValidator` is of type `Address -> ValidatorScript`
 
 the logic of the script is explained in the lecture, basically it just demands that in order to withdraw the rewards, half of the withdrawl has to go to a specified address (the one used as argument for the typed script)
 
-so, once the cardano-cli has the script, using the cardano-api it can produce a `StakeCredential` with value `StakeCredentialByScript (ScriptHash sh)`, where `sh` is the script hash obtained with `scriptHash`.
+So, once the cardano-cli has the script, using the cardano-api it can produce a `StakeCredential` with value `StakeCredentialByScript (ScriptHash sh)`, where `sh` is the script hash obtained with `scriptHash`.
 finally, the cardano-api provides the `makeStakeAddress` function to build the address.
 
 ```haskell

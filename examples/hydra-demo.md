@@ -1,15 +1,14 @@
 # building transactions by hand
 
-to construct a cardano-api `TxBody` we need first the bodyContent.
-we will construct a cardano-api `TxBodyContent BuildTx AlonzoEra`, for which we need, in particular, the two fields `txIns` and `txOuts`
+to construct a cardano-api `TxBody` we need first the bodyContent. We will construct a cardano-api `TxBodyContent BuildTx AlonzoEra`, for which we need, in particular, the two fields `txIns` and `txOuts`
 
-## construct the fitting (TxIn, BuildTxWith build (Witness WitCtxTxIn era))
+## construct the fitting txIns
 
-`txIns :: TxIns build era`, which is of type:
+The `txIns` field expects a value of the following type:
 
-type TxIns build era = [(TxIn, BuildTxWith build (Witness WitCtxTxIn era))]
+`type TxIns build era = [(TxIn, BuildTxWith build (Witness WitCtxTxIn era))]`
 
-next to the TxIn itself, there is the information of whether the TxIn needs a `KeyWitness` or a `ScriptWitness`
+so, next to the TxIn itself, there is the information of whether the TxIn needs a `KeyWitness` or a `ScriptWitness`
 
 ```haskell
 -- for spending with a KeyWitness
@@ -45,10 +44,9 @@ txInForValidator txIn validator (TxDatum datum) (TxRedeemer redeemer) exUnits = 
     ScriptInEra _ (SimpleScript _ _) -> Left DeserialisationError
 ```
 
-important: `toCardanoScriptInEra` and `toCardanoAPIData` (which is used by `toCardanoData`) are functions from the `plutus-apps` module `Ledger.Tx.CardanoApi.Internal`. This module is an interface to the transaction types from 'cardano-api'
-and gets re-exported through [Ledger.Tx.CardanoAPI](https://github.com/input-output-hk/plutus-apps/blob/main/plutus-ledger/src/Ledger/Tx/CardanoAPI.hs)
+important: `toCardanoScriptInEra` and `toCardanoAPIData` (which is used by `toCardanoData`) are functions from the `plutus-apps` module `Ledger.Tx.CardanoApi.Internal`. This module is an interface to the transaction types from 'cardano-api' and gets re-exported through [Ledger.Tx.CardanoAPI](https://github.com/input-output-hk/plutus-apps/blob/main/plutus-ledger/src/Ledger/Tx/CardanoAPI.hs)
 
-## construct the fitting TxOut ctx era
+## construct the fitting txOuts
 
 ```haskell
 data TxOut ctx era = TxOut (AddressInEra    era)
@@ -59,17 +57,15 @@ data TxOut ctx era = TxOut (AddressInEra    era)
 
 ### TxOut to key address
 
-Constructing a TxOut to a key address is pretty straightforward
-
-for the address, we first we need a `SigningKey PaymentKey` which we get (as `PaymentKey` has an instance of the `Key` class) with
+Constructing a TxOut to a key address is pretty straightforward. For the address, we first we need a `SigningKey PaymentKey` which we get (as `PaymentKey` has an instance of the `Key` class) with:
 
 `generateSigningKey :: Key keyrole => AsType keyrole -> IO (SigningKey keyrole)`
 
-the corresponding `VerificationKey PaymentKey` and then its hash is obtained with
+The corresponding `VerificationKey PaymentKey` and then its hash is obtained with:
 
-`vkeyHash = verificationKeyHash (getVerificationKey skey)`, with both of these functions defined in the `Key` class
+`vkeyHash = verificationKeyHash (getVerificationKey skey)`, with both of these functions defined in the `Key` class.
 
-defining the networkId as either `Mainnet` or `Testnet NetworkMagic`, we get the address with another cardano-api function:
+Defining the networkId as either `Mainnet` or `Testnet NetworkMagic`, we get the address with another cardano-api function:
 
 `keyAddr = makeShelleyAddressInEra networkId (PaymentCredentialByKey vkeyHash) NoStakeAddress`
 
@@ -82,21 +78,21 @@ putting it all together:
 
 ### TxOut to script address
 
-To construct a TxOut for a script address we also need a `TxOutDatumHash`. if the datum d is an instance to the `ToData` class, we can convert it as follows:
+To construct a TxOut for a script address we additionally need a `TxOutDatumHash`. if the datum d is an instance to the `ToData` class, we can convert it as follows:
 
 `datumHash = TxOutDatumHash ScriptDataInAlonzoEra (hashScriptData $ toCardanoData d)`
 
-where `toCardanoData` again is from Ledger.Tx.CardanoAPI
+where `toCardanoData` again is from Ledger.Tx.CardanoAPI.
 
 For the script address, the `PaymentCredential` must be a `PaymentCredentialByScript ScriptHash`, having this we can again construct the address with
 
 `scriptAddr = makeShelleyAddressInEra networkId (PaymentCredentialByScript scriptHash) NoStakeAddress`
 
-And the resulting TxOut is then
+And the resulting TxOut is then:
 
 `scriptOut = TxOut scriptAddr (lovelaceToTxOutValue lovelace) datumHash ReferenceScriptNone`
 
-so in a real world example:
+So, putting it all together in a real world example:
 
 ```haskell
 -- simplified, from `buildBetTx`, having a validatorAddress and a changeAddress
@@ -112,18 +108,7 @@ buildTxBody inputRefs = do
   first (("bad tx-body: " <>) . show) $ createAndValidateTransactionBody bodyContent
 ```
 
-`createAndValidateTransactionBody` is from the cardano-api
-
-as we see from the TxBodyContent, we are in the AlonzoEra, this is decisive for `createAndValidateTransactionBody` and particularly for `makeShelleyTransactionBody`, which depending on the era builds a different TxBody
-in our case, we have the `ShelleyBasedEraAlonzo`, (must be ShelleyBased as in the Byron era there were no complex transactions). so our baseBodyContent is missing the fields 
-
-- txInsReference =  TxInsReferenceNone        :: TxInsReference build era,
-- txTotalCollateral = TxTotalCollateralNone   :: TxTotalCollateral era,
-- txReturnCollateral = TxReturnCollateralNone :: TxReturnCollateral CtxTx era,
-
-of course we could add them and build a `TxBody BabbageEra`
-
-as `baseBodyContent` we take:
+where `createAndValidateTransactionBody` is taken from the cardano-api. And as `baseBodyContent` we have:
 
 ```haskell
 baseBodyContent :: TxBodyContent BuildTx AlonzoEra
@@ -146,15 +131,22 @@ baseBodyContent =
     }
 ```
 
-txFee is set to 0 at this point because this transaction will be sent to a hydra head via websocket.  
+as we see from the TxBodyContent, we are in the AlonzoEra, this is decisive for `createAndValidateTransactionBody` and particularly for `makeShelleyTransactionBody`, which depending on the era builds a different TxBody
+in our case, we have the `ShelleyBasedEraAlonzo`, (must be ShelleyBased as in the Byron era there were no complex transactions). so our baseBodyContent is missing the fields 
 
-to build a transaction that is to be sent to a cardano-node, we would use `makeTransactionBodyAutoBalance` instead of `createAndValidateTransactionBody`. `makeTransactionBodyAutoBalance` needs more information, though, all of which can be queried from a local node. how this is done is shown in the `runTxBuildCmd` function from the [Cardano.CLI.Shelley.Run.Transaction](https://github.com/input-output-hk/cardano-node/blob/master/cardano-cli/src/Cardano/CLI/Shelley/Run/Transaction.hs) module
+- txInsReference =  TxInsReferenceNone        :: TxInsReference build era,
+- txTotalCollateral = TxTotalCollateralNone   :: TxTotalCollateral era,
+- txReturnCollateral = TxReturnCollateralNone :: TxReturnCollateral CtxTx era,
+
+of course we could add them and build a `TxBody BabbageEra`
+
+note: the `txFee` is set to 0 at this point because this transaction will be sent to a hydra head via websocket and thus fee rules for the cardano mainnet/testnets don't apply. To build a transaction that is to be sent to a cardano-node, we would use `makeTransactionBodyAutoBalance` instead of `createAndValidateTransactionBody`. `makeTransactionBodyAutoBalance` needs more information, though, all of which can be queried from a local node. how this is done is shown in the `runTxBuildCmd` function from the [Cardano.CLI.Shelley.Run.Transaction](https://github.com/input-output-hk/cardano-node/blob/master/cardano-cli/src/Cardano/CLI/Shelley/Run/Transaction.hs) module
+
+#### build with txInForValidator
 
 To build a transaction that spends from a script address, see `buildClaimTx` from the [hydra-demo](https://github.com/mlabs-haskell/hydra-demo/blob/master/src/HydraRPS/App.hs). 
 
 There are a few differences to the example above:
-
-#### build with txInForValidator
 
 the `txIns` field of the TxBodyContent contains elements that are built with `txInForValidator` instead of `txInForSpending`
       
@@ -167,12 +159,12 @@ ExecutionUnits
   }
 ```
 
-In the case of a transaction for the cardano blockchain, the evaluation is done with `evaluateTransactionExecutionUnits` in `makeTransactionBodyAutoBalance`, where all the scripts are run to count the execution units
+In the case of a transaction for the cardano blockchain, the evaluation is done with `evaluateTransactionExecutionUnits` in `makeTransactionBodyAutoBalance`, where all the scripts are run to count the execution units.
 
 #### Collateral
 
 we need to define a `TxIn` as collateral
-txInsCollateral = TxInsCollateral CollateralInAlonzoEra [collateralTxIn]
+`txInsCollateral = TxInsCollateral CollateralInAlonzoEra [collateralTxIn]`
 
 #### ProtocolParameters
 

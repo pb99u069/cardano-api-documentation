@@ -2,38 +2,22 @@
 
 This example taken from PPP0306
 
-from the cardano-api perspective, there is no difference beween `writeValidator` (see payToScript.md) and `writeMintingPolicy` 
+From the cardano-api perspective, there is no difference beween `writeValidator` (see payToScript.md) and `writeMintingPolicy` 
 
 ```haskell
 writeMintingPolicy :: FilePath -> Plutus.MintingPolicy -> IO (Either (FileError ()) ())
 writeMintingPolicy file = writeFileTextEnvelope @(PlutusScript PlutusScriptV1) file Nothing . PlutusScriptSerialised . SBS.toShort . LBS.toStrict . serialise . Plutus.getMintingPolicy
 ```
 
-### getting the value to mint
+## getting the value to mint
 
-first we need to calculate the policyId from the monetary policy script:
+First, we need to calculate the policyId from the monetary policy script. This can be done by providing the script file from above to `cardano-cli transaction policyid`. Under the hood, the script is hashed and serialised with the following two cardano-api functions:
 
-cardano-cli transaction policyid --script-file $policyFile
+`serialiseToRawBytesHexText $ hashScript script`
 
-to make addresses from scripts, we use `hashScript`
+note: the `ScriptHash` obtained by the `hashScript` function is separate from the `Hash` type to avoid the script hash type being parametrised by the era. The representation is era independent, and there are many places where we want to use a script hash where we don't want things to be era-parametrised.
 
-```haskell
-hashScript (PlutusScript PlutusScriptV1 (PlutusScriptSerialised script)) =
-    -- For Plutus V1, we convert to the Alonzo-era version specifically and
-    -- hash that. Later ledger eras have to be compatible anyway.
-    ScriptHash
-  . Ledger.hashScript @(ShelleyLedgerEra AlonzoEra)
-  $ Alonzo.PlutusScript Alonzo.PlutusV1 script
-```
-
-(note that this `ScriptHash` is separate from the 'Hash' type to avoid the script
-hash type being parametrised by the era. The representation is era
-independent, and there are many places where we want to use a script
-hash where we don't want things to be era-parametrised.)
-
-then this is serialised with `serialiseToRawBytesHexText`, giving us the policyId
-
-The TokenName, called `AssetName` on the cardano-api side, must be in hex form. so coming from the plutus side, we first need to convert it to the cardano-api type and then serialise it to hex bytes (and also unpack it as the cardano-cli expects a string):
+Next to the policy id, we need a token name to construct a value. The TokenName, called `AssetName` on the cardano-api side, must be in hex form. so coming from the plutus side, we first need to convert it to the cardano-api type and then serialise it to hex bytes (and also unpack it as the cardano-cli expects a string):
 
 ```haskell
 unsafeTokenNameToHex :: TokenName -> String
@@ -42,18 +26,19 @@ unsafeTokenNameToHex = BS8.unpack . serialiseToRawBytesHex . fromJust . deserial
     getByteString (BuiltinByteString bs) = bs
 ```
 
-having the policyId and tnHex, the value defined for the cardano-cli must be in the form of `amt policyId.tnHex`, where amt is the amount of the token we want to mint.
+Having the policyId and tnHex, the value defined for the cardano-cli (see `--tx-out` and `--mint` below) must be in the form of `amt policyId.tnHex`, where amt is the amount of the token we want to mint.
 
-### Building the transaction
+## Building the transaction
 
-again, as for spending from a validator script, minting from a policy script is only possible with a script witness. 
+Again, as for spending from a validator script, minting from a policy script is only possible with a script witness. 
 
-more precisely, the value passed to `runTxBuild` in cardano-cli is of type `(Value, [ScriptWitness WitCtxMint era])`, which is somehow similar to the txIns field of the transaction body content, but instead of a list of pairs (txIn, script witness for that txIn), we have just 1 value containing all the tokens to mint plus a list of witnesses, this time with the context `WitCtxMint` instead of `WitCtxTxIn`
+More precisely, the mint value passed to `runTxBuild` in cardano-cli is of type `(Value, [ScriptWitness WitCtxMint era])`, which is somehow similar to the `txIns` field of the transaction body content, but instead of a list of pairs (txIn, witness), we have just 1 value containing all the tokens to mint plus a list of script witnesses, this time with the context `WitCtxMint` instead of `WitCtxTxIn`
 
-The number of script witnesses depends on the number of the poliyIds contained in the value, of course. In our case it's just 1 token to mint, so there will be 1 script witness, 
+The number of script witnesses depends on the number of the poliyIds contained in the value, of course. In our case it's just 1 token to mint, so there will be 1 script witness. 
 
-As for the datum needed for a script witness, we simply parse it, when in the `WitCtxMint`, to a value of `NoScriptDatumForMint`. The redeemer meanwhile is a type alias for `ScriptData` and thus context independent. Same as in spendFromScript, we use the unit.json redeemer.
-the txMintValue of the transaction body content however expects a value of type `TxMintValue`:
+As for the datum needed for a script witness, we simply parse it, when in the `WitCtxMint`, to a value of `NoScriptDatumForMint`. The redeemer meanwhile is a type alias for `ScriptData` and thus context independent. As in the `spendFromScript` example, we use the unit.json redeemer.
+
+The cardano-cli function `createTxMintValue` finally produces a value of the correct type (see below) which we need for the `txMintValue` field of the transaction body content.
 
 ```haskell
 data TxMintValue build era where
@@ -64,9 +49,7 @@ data TxMintValue build era where
                  -> TxMintValue build era
 ```
 
-this is done with the `createTxMintValue` function.
-
-Once we have the value for the `txIns` field of the transaction body content, we can proceed as in the `payToScript.md` example. Apart from running the minting script instead of the validator script, the balancing phase of the transaction building is identical, and same goes for signing and submitting the transaction.
+Once we have the value for the `txMintValue` field of the transaction body content, we can proceed as in the `payToScript.md` example. Apart from running the minting script instead of the validator script, the balancing phase of the transaction building is identical, and same goes for signing and submitting the transaction.
 
 ```bash
 cardano-cli transaction build \
